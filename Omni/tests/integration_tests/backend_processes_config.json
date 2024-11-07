@@ -1,0 +1,26 @@
+{
+    "backend_processes_data_file": "backend_processes_data.json",
+    "backend_processes": [
+        {
+            "name": "STM OpenOCD",
+            "port": "3333",
+            "protocol": "tcp",
+            "path": "/home/eks99th/st/stm32cubeide_1.16.1/plugins/com.st.stm32cube.ide.mcu.externaltools.openocd.linux64_2.3.200.202404091248/tools/bin/openocd",
+            "arguments": [
+                "-f",
+                "Debug.cfg",
+                "-s",
+                "/home/eks99th/Desktop/Omni/Omni/tests/integration_tests/Openocd",
+                "-s",
+                "/home/eks99th/st/stm32cubeide_1.16.1/plugins/com.st.stm32cube.ide.mcu.debug.openocd_2.2.100.202406131243/resources/openocd/st_scripts",
+                "-s",
+                "/home/eks99th/st/stm32cubeide_1.16.1/plugins/com.st.stm32cube.ide.mpu.debug.openocd_2.1.200.202405171325/resources/openocd/st_scripts",
+                "-c",
+                "gdb_report_data_abort enable",
+                "-c",
+                "gdb_port 3333"
+            ],
+            "log_file": "OpenOCD_LOG.txt"
+        }
+    ]
+}

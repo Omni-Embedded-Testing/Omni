@@ -4,7 +4,18 @@ import time
 from datetime import datetime
 import Omni.process_manager.process_manager as process_manager
 import re
+import psutil
+import json
 
+def is_port_open(port, protocol='tcp'):
+    connections = psutil.net_connections(kind=protocol)
+    for conn in connections:
+        if conn.laddr.port == port:
+            return True
+    return False
+
+def is_pid_running(pid):
+    return psutil.pid_exists(pid)
 
 class ProcessStartupError(Exception):
     def __init__(self, message):
@@ -16,12 +27,10 @@ class ProcessStartupError(Exception):
             return f"{error_message}"
         return error_message
 
-
-def launch_openocd(process_file, openocd_path, board_cfg_file_path, interface_cfg_file_path, open_ocd_log_path):
+def launch_openocd(process_file, openocd_path, arguments, open_ocd_log_path):
     process_manager.verify_file(process_file)
     openocd_log_fd = open(open_ocd_log_path, 'w')
-    open_ocd_launch = [openocd_path, "-f",
-                       board_cfg_file_path, "-f", interface_cfg_file_path]
+    open_ocd_launch = [openocd_path] + arguments
     process = subprocess.Popen(
         open_ocd_launch, stdout=openocd_log_fd, stderr=openocd_log_fd)
     openocd_jobpid = str(process.pid)
@@ -40,20 +49,32 @@ def launch_openocd(process_file, openocd_path, board_cfg_file_path, interface_cf
     process_manager.pretty_print_json(open_ocd_process_entry)
 
 
-def verify_openocd(open_ocd_log_path, wait_time=5):
-    pattern = "Listening on port \\d* for gdb connections"
-    file_contents_try1 = read_log(open_ocd_log_path)
-    found_try1 = re.search(pattern, file_contents_try1)
-    if (found_try1 == None):
-        time.sleep(wait_time)
-    file_contents_try2 = read_log(open_ocd_log_path)
-    found_try2 = re.search(pattern, file_contents_try2)
-    if (found_try2 == None):
-        raise ProcessStartupError(
-            "Openocd process did not started propperly ")
+def verify_openocd(proccess_data_file)->bool:
+    with open(proccess_data_file, 'r') as file:
+        backend_processes = json.load(file)
+    if not backend_processes:
+        raise ProcessStartupError("No backend processes found in the process data file ${proccess_data_file}.")
+    if "pid" in backend_processes[0]:
+        open_ocd_pid= int(backend_processes[0]["pid"])
+        if(is_pid_running(open_ocd_pid)):
+            print(f"Openocd is running with PID {str(open_ocd_pid)}.")
+        else:
+            print(f"PID {str(open_ocd_pid)} is not running.")
+            return False
     else:
-        return
-
+        raise ProcessStartupError("File ${proccess_data_file} malformed pid entry not present.")
+    if "port" in backend_processes[0]:
+            port= backend_processes[0]["port"]
+            if is_port_open(port):
+                print(f"OpenOCD listening on Port {port}")
+                return True
+            else:
+                print(f"OpenOCD not listening on Port {port}")
+                return False
+    else:
+        raise ProcessStartupError("File ${proccess_data_file} malformed pid entry not present.")
+        
+    return True
 
 def read_log(log_file_path):
     with open(log_file_path, 'r') as log:
