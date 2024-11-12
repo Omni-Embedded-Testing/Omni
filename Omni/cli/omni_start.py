@@ -3,8 +3,6 @@ import Omni.process_manager.process_manager
 
 def main():
     parser = argparse.ArgumentParser(description="Starts the backend processes according to the provided configuration.")
-    
-    # Define CLI arguments
     parser.add_argument("-b", "--backend", 
                         help="Path to the configuration file for backend processes (required). This file specifies the processes to start.",
                         type=str, 

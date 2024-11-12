@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import json
 import shutil
+import psutil
 
 from ...process_manager.process_manager import ProcessManager
 
@@ -132,9 +133,10 @@ class TestProcessManager(unittest.TestCase):
         self.assertEqual(saved_processes[1]["port"], "44444")
         self.assertEqual(saved_processes[1]["status"], "running")
 
-
+    @patch('Omni.process_manager.process_manager.sleep', return_value=None)
     @patch('Omni.process_manager.process_manager.subprocess.Popen')
-    def test_terminate_processes(self, mock_popen):
+    @patch('Omni.process_manager.process_manager.psutil.Process')
+    def test_terminate_processes(self, mock_process_class, mock_popen, mock_sleep):
         """
         User requests the processes to terminate. Each of the processes from data file receive a SIGTERM request 
         and close correctly.
@@ -145,12 +147,75 @@ class TestProcessManager(unittest.TestCase):
         mock_popen_instance.pid = 1234
         mock_popen_instance.poll.return_value = None
 
+        mock_process_instance = MagicMock()
+        mock_process_class.side_effect = [mock_process_instance, 
+                                          mock_process_instance, 
+                                          psutil.NoSuchProcess(mock_popen_instance.pid),
+                                          psutil.NoSuchProcess(mock_popen_instance.pid)]
+
         process_starter = ProcessManager(test_data_dir_path / "backend_processes_config.json")
         process_starter.create_backend_processes_data_file(temp_dir_path)
         process_starter.launch_processes()
         del process_starter
         process_stoper = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_stoper.load_backend_processes_data_file(temp_dir_path)
         process_stoper.close_applications()
+        expected_calls = [call(1234), call(1234)]
+        mock_process_class.assert_has_calls(expected_calls, any_order=True)
+        self.assertEqual(mock_process_instance.terminate.call_count, 2)
+        saved_processes=load_processes_from_data_file(temp_dir_path / "my_backend_processes_status.json")
+        self.assertEqual(saved_processes[0]["status"], "terminate requested")
+        self.assertEqual(saved_processes[1]["status"], "terminate requested")
+        process_stoper.verify_application_termination()
+        saved_processes=load_processes_from_data_file(temp_dir_path / "my_backend_processes_status.json")
+        self.assertEqual(saved_processes[0]["status"], "terminated")
+        self.assertEqual(saved_processes[1]["status"], "terminated")
+
+    @patch('Omni.process_manager.process_manager.sleep', return_value=None)
+    @patch('Omni.process_manager.process_manager.subprocess.Popen')
+    @patch('Omni.process_manager.process_manager.psutil.Process')
+    def test_terminate_processes_not_terminated(self, mock_process_class, mock_popen, mock_sleep):
+        """
+        User requests the processes to terminate. Each of the processes from data file receive a SIGTERM request 
+        and the first one does not terminate propperly.
+        """
+        del_temp()
+        mock_popen_instance = MagicMock()
+        mock_popen.return_value = mock_popen_instance
+        mock_popen_instance.pid = 1234
+        mock_popen_instance.poll.return_value = None
+
+        mock_process_instance = MagicMock()
+        mock_process_class.return_value = mock_process_instance
+        process_terminate_call = mock_process_instance
+        process_one_not_running = psutil.NoSuchProcess(mock_popen_instance.pid)
+        process_two_running_first_call = mock_process_instance
+        process_two_not_running_second_call = psutil.NoSuchProcess(mock_popen_instance.pid)
+        mock_process_class.side_effect = [process_terminate_call, #executed in close_applications when the 1st process is terminated
+                                          process_terminate_call, #executed in close_applications when the 2nd process is terminated
+                                          process_one_not_running,#executed in verify_application_termination when the 1st process is fetched
+                                          process_two_running_first_call,#executed in verify_application_termination when the 2st process is fetched
+                                          process_two_not_running_second_call#executed in verify_application_termination when the 2st process is fetched for the second time
+                                          ]
+
+        process_starter = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_starter.create_backend_processes_data_file(temp_dir_path)
+        process_starter.launch_processes()
+        del process_starter
+        process_stoper = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_stoper.load_backend_processes_data_file(temp_dir_path)
+        process_stoper.close_applications()
+        expected_calls = [call(1234), call(1234)]
+        mock_process_class.assert_has_calls(expected_calls, any_order=True)
+        self.assertEqual(mock_process_instance.terminate.call_count, 2)
+        saved_processes=load_processes_from_data_file(temp_dir_path / "my_backend_processes_status.json")
+        self.assertEqual(saved_processes[0]["status"], "terminate requested")
+        self.assertEqual(saved_processes[1]["status"], "terminate requested")
+        process_stoper.verify_application_termination()
+        mock_process_instance.kill.assert_called_once()
+        saved_processes=load_processes_from_data_file(temp_dir_path / "my_backend_processes_status.json")
+        self.assertEqual(saved_processes[0]["status"], "terminated")
+        self.assertEqual(saved_processes[1]["status"], "killed")
 
     @classmethod
     def teardown_class(cls):

@@ -1,9 +1,9 @@
-import subprocess
+import json
 import pytest
 from unittest import mock
 from unittest.mock import ANY, MagicMock
 from Omni.applications.GDBServer import launch_gdbserver
-from Omni.process_manager.process_manager import create_config_file
+# from Omni.process_manager.process_manager import create_config_file
 import pytest
 import pathlib
 from pathlib import Path
@@ -12,6 +12,24 @@ import os
 
 temporary_folder = pathlib.Path("./TempGDBServer")
 log_file_path = temporary_folder / "GDBServerLog.txt"
+
+
+def create_config_file(filename):
+    if (check_file_exists(filename) == True):
+        _error_msg_file_already_exists(filename)
+    else:
+        _create_empty_process_file(filename)
+
+def check_file_exists(file_path):
+    return os.path.isfile(file_path)
+
+
+def _error_msg_file_already_exists(filename):
+    raise FileExistsError(f"Error: File '{filename}' already exists!")
+
+def _create_empty_process_file(filename):
+    with open(filename, "w") as json_file:
+        json.dump([], json_file)
 
 
 @pytest.fixture(scope="session", autouse=True)

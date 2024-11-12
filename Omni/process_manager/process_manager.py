@@ -1,8 +1,11 @@
 import json
 import os
 import subprocess
+import psutil
 from datetime import datetime
 from pathlib import Path
+from time import sleep
+
 
 
 # Function to extract each element's properties into a map with mandatory field check
@@ -56,20 +59,22 @@ class ProcessManager:
 
     def __get_backend_processes_data_path(self, base_path):
         if base_path is not None:
-            temp_backend_processes_data_path = Path(base_path) / self.backend_processes_data_file_name
+            temp_backend_processes_data_path = Path(base_path) / Path(self.backend_processes_data_file_name)
         else:
             temp_backend_processes_data_path = self.backend_processes_data_path
         return temp_backend_processes_data_path
     
     def load_backend_processes_data_file(self, base_path=None):
         temp_backend_processes_data_path = self.__get_backend_processes_data_path(base_path)
-        if self.check_file_exists(temp_backend_processes_data_path):
+        if self.check_file_exists(temp_backend_processes_data_path) is False:
             self._error_msg_file_doesnt_exist(temp_backend_processes_data_path)
         else:
             self.backend_processes_data_path=temp_backend_processes_data_path
             print(f"Backend processes data file path: {self.backend_processes_data_path}")
             self.backend_loaded_processes= self.__load_processes_from_data_file()
-            print(f"Loaded processes: {self.backend_loaded_processes}")
+            print("Loaded processes:")
+            self.pretty_print_json(self.backend_loaded_processes)
+            
 
     def check_file_exists(self, file_path):
         return os.path.isfile(file_path)
@@ -106,22 +111,17 @@ class ProcessManager:
 
     def _build_process_entry(self, process_maped, process_launch, process_pid):
         process_entry = {
-                "name": process_maped["name"],
-                "pid": process_pid,
-                "log_file": process_maped["log_file"],
-                "process_call": " ".join(process_launch),
-                "start_time": datetime.now().strftime("%H:%M:%S"),
-                "port": process_maped["port"],
-                "search_string": process_maped["search_string"],
-                "status": "running",
+            "name": process_maped["name"],
+            "pid": process_pid,
+            "log_file": process_maped["log_file"],
+            "process_call": " ".join(process_launch),
+            "start_time": datetime.now().strftime("%H:%M:%S.%f")[:-3],  
+            "port": process_maped["port"],
+            "search_string": process_maped["search_string"],
+            "status": "running",
             }
-        
         return process_entry
 
-
-    # def delete_config_file(self, file_path):
-    #     if self.load_processes(file_path) == []:
-    #         os.remove(file_path)
 
     def _create_empty_process_file(self):
         Path(self.backend_processes_data_path).parent.mkdir(parents=True, exist_ok=True)
@@ -153,21 +153,46 @@ class ProcessManager:
         print(json.dumps(data, indent=4))
 
     def close_applications(self):
-        json_data = self.__load_processes_from_data_file()
-        pass
-        # with open(self.config_file, 'r') as file:
-        #     backend_processes = json.load(file)
-        # backend_processes_data_file = backend_processes.get('backend_processes_data_file')
-        # print(backend_processes_data_file)
-        # self.verify_file(config_file)
-        # json_data = self.load_processes(config_file)
-        # for application in json_data:
-        #     pid = application["pid"]
-        #     self.__terminate_process_by_pid(int(pid))
+        for application in self.backend_loaded_processes:
+            pid = application["pid"]
+            print(f"Closing '{application['name']}'. Sending SIGTERM to pid: {pid}")
+            self.__terminate_process_by_pid(int(pid))
+            application["status"] = "terminate requested"
+            application["SIGTERM_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+        self.__save_processes_in_data_file(self.backend_loaded_processes)
+            
+    
+    def verify_application_termination(self,kill_delay=1):
+        for application in self.backend_loaded_processes:
+            pid = application["pid"]
+            print(f"Verifying application '{application['name']}' termination")
+            try:
+                process = psutil.Process(int(pid))
+            except psutil.NoSuchProcess:
+                print(f"Process '{application['name']}' with pid '{pid}' has been terminated successfully")
+                application["status"] = "terminated"
+                continue
+            if process.is_running():
+                print(f"Process '{application['name']}' with pid '{pid}' is still running. SIGTERM failed")
+                print(f"Sending SIGKILL to process '{application['name']}' with pid '{pid}'")
+                application["SIGKILL_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                application["status"] = "SIGKILL requested"
+                process.kill()
+                sleep(kill_delay)
+                try:
+                    process = psutil.Process(int(pid))
+                except psutil.NoSuchProcess:
+                    print(f"Process '{application['name']}' with pid '{pid}' has been terminated after SIGKILL")
+                    application["status"] = "killed"
+                    continue
+                if process.is_running():
+                    print(f"Process '{application['name']}' with pid '{pid}' is still running. SIGKILL failed")
+                    application["status"] = "SIGKILL failed"
+        self.__save_processes_in_data_file(self.backend_loaded_processes)
 
-    # def __terminate_process_by_pid(self, pid: int):
-    #     process = psutil.Process(pid)
-    #     process.terminate()
+    def __terminate_process_by_pid(self, pid: int):
+        process = psutil.Process(pid)
+        process.terminate()
 
     def verify_file(self):
         self.__verify_file_exists(self.config_file)
