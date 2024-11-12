@@ -1,0 +1,18 @@
+{
+    "READ_ME": "MALFORMATION INTRODUCED: Missing 'backend_processes_data_file' entry",
+    "backend_processes": [
+        {
+            "name": "MyApplication",
+            "port": "7777",
+            "protocol": "tcp",
+            "path": "/path/to/MyApplication",
+            "arguments": [
+                "-a",
+                "arg1",
+                "-b",
+                "arg2"
+            ],
+            "log_file": "LOG.txt"
+        }
+    ]
+}

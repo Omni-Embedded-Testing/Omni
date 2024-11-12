@@ -1,0 +1,17 @@
+{
+    "backend_processes_data_file": "backend_processes_status.json",
+    "backend_processes": [
+        {
+            "name": "MyApplication",
+            "protocol": "tcp",
+            "path": "/path/to/MyApplication",
+            "arguments": [
+                "-a",
+                "arg1",
+                "-b",
+                "arg2"
+            ],
+            "log_file": "LOG.txt"
+        }
+    ]
+}

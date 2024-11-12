@@ -1,138 +1,158 @@
 import os
 import unittest
-from unittest.mock import patch, MagicMock, call
-from io import StringIO
-import sys
+from unittest.mock import patch, MagicMock, call, ANY
+from pathlib import Path
+import pytest
+import json
 import shutil
 
-from ...process_manager.process_manager import *
+from ...process_manager.process_manager import ProcessManager
 
-dummy_entry1 = {
-    "application": "AnotherApp",
-    "pid": 1234,
-    "log_file": "another_app.log",
-    "process_call": "python another_app.py",
-    "pgrep_string": "App"
-}
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+test_data_dir_path = Path(current_file_path) / "process_manager_test_data"
+temp_dir_path = test_data_dir_path / "Temp"
 
-dummy_entry2 = {
-    "application": "AnotherApp2",
-    "pid": 1233,
-    "log_file": "another_app.log",
-    "process_call": "python another_app.py",
-    "pgrep_string": "App"
-}
 
-invalid_entry = {
-    "invalid": "AnotherApp",
-}
+def load_processes_from_data_file(data_file):
+    with open(data_file, "r") as file:
+            json_data = json.load(file)
+    return json_data
+
+def del_temp():
+    if os.path.exists(temp_dir_path):
+        shutil.rmtree(temp_dir_path)
 
 
 class TestProcessManager(unittest.TestCase):
 
     @classmethod
     def setup_class(cls):
-        folder_path = "Temp"
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+        if not os.path.exists(temp_dir_path):
+            os.makedirs(temp_dir_path)
         else:
-            shutil.rmtree(folder_path)
-            os.makedirs(folder_path)
+            shutil.rmtree(temp_dir_path)
+            os.makedirs(temp_dir_path)
 
-    def test_process_file_print_error_if_file_exists(self):
-        file_path = "Temp/my_existing_file.json"
-        with open(file_path, 'w') as f:
-            f.write('This is a dummy file.')
-        captured_output = StringIO()
-        sys.stdout = captured_output
-        create_config_file(file_path)
-        sys.stdout = sys.__stdout__
-        printed_string = captured_output.getvalue().strip()
-        assert "ERROR: FILE ALREADY EXISTS" in printed_string
-        os.remove(file_path)
+    def test_process_manager_raises_if_config_file_doesnt_exists(self):
+            """
+            User tries to create a ProcessManager object with a non-existing configuration file.
+            Raises:
+                FileNotFoundError: If the configuration file does not exist.
+            """
+            with pytest.raises(FileNotFoundError):
+                malformed_process_cfg_file = test_data_dir_path / "does_not_exists.json"
+                ProcessManager(malformed_process_cfg_file)
 
-    def test_append_process_data_to_file_saves_one_into_file(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        append_process_data_to_file(dummy_entry1, file_path)
-        with open(file_path, "r") as file:
-            actual_data = json.load(file)
-        assert actual_data == [dummy_entry1]
-        os.remove(file_path)
 
-    def test_append_process_data_to_file_saves_two_entries_into_file(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        append_process_data_to_file(dummy_entry1, file_path)
-        append_process_data_to_file(dummy_entry2, file_path)
-        with open(file_path, "r") as file:
-            actual_data = json.load(file)
-        assert actual_data == [dummy_entry1, dummy_entry2]
-        os.remove(file_path)
+    def test_process_config_file_is_malfomed_no_backend_processes_data_file(self):
+        """
+        User tries to create a ProcessManager object with a malformed 
+        configuration file. The field 'backend_processes_data_file' is missing.
+        Raises:
+        KeyError: If the configuration file does not exist.
+        """
+        with pytest.raises(KeyError):
+            malformed_process_cfg_file = test_data_dir_path / "backend_processes_malformed1.json"
+            ProcessManager(malformed_process_cfg_file)
 
-    def test_append_process_data_to_file_throws_exception_if_entry_incomplete(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        with self.assertRaises(InvalidProcessEntry):
-            append_process_data_to_file(invalid_entry, file_path)
-        os.remove(file_path)
 
-    def test_append_process_data_to_file_saves_process_data_into_file(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        append_process_data_to_file(dummy_entry1, file_path)
-        with open(file_path, "r") as file:
-            actual_data = json.load(file)
-        assert actual_data == [dummy_entry1]
-        os.remove(file_path)
+    def test_create_backend_processes_data_file_raise_if_file_exists(self):
+        """
+        User tries to create a backend_processes_data_file but the file already 
+        exists.
+        Raises:
+        RuntimeError: If the file already exists.
+        """
+        with pytest.raises(RuntimeError,match="File '.*' already exists!"):
+            malformed_process_cfg_file = test_data_dir_path / "backend_processes_malformed2.json"
+            manager=ProcessManager(malformed_process_cfg_file)
+            manager.create_backend_processes_data_file()
 
-    def test_append_process_data_to_file_throws_exception_file_not_found(self):
-        file_path = "Temp/nonexistent_file.json"
-        with self.assertRaises(FileNotFoundError):
-            append_process_data_to_file(dummy_entry1, file_path)
+    def test_launch_processes_with_bad_process_config(self):
+        """
+        User tries to launch a process but one of the processes configuraitons from backend_processes_config.json
+        is missing the entry port.
+        """
+        process_manager = ProcessManager(test_data_dir_path / "backend_processes_malformed3.json")
+        with pytest.raises(ValueError, match=r"Entry '.*' is mandatory\.\s*\n.*"):
+            process_manager.launch_processes()
+    
+    @patch('Omni.process_manager.process_manager.subprocess.Popen')
+    def test_launch_processes_fail_process(self, mock_popen):
+        """
+        User tries to launches the processes and a process fails to launch.
+        """
+        del_temp()
+        mock_popen_instance = MagicMock()
+        mock_popen.return_value = mock_popen_instance
+        mock_popen_instance.pid = 1234
+        # The return code is 0, which means the process was terminated successfully
+        mock_popen_instance.poll.return_value = 0
+        process_manager = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_manager.create_backend_processes_data_file(temp_dir_path)
+        with pytest.raises(RuntimeError, match="Process '.*' has stopped with return code .*"):
+            process_manager.launch_processes()
 
-    def test_manager_deletes_file_if_file_empty(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        delete_config_file(file_path)
-        self.assertFalse(os.path.isfile(file_path))
 
-    def test_manager_does_not_deletes_file_if_file_not_empty(self):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        append_process_data_to_file(dummy_entry1, file_path)
-        delete_config_file(file_path)
-        self.assertTrue(os.path.isfile(file_path))
-        os.remove(file_path)
+    @patch('Omni.process_manager.process_manager.subprocess.Popen')
+    def test_launch_processes(self, mock_popen):
+        """
+        Verifies that when the user initiates the launch of backend processes, the expected system calls are made 
+        to start each process, and the relevant process data is saved accurately to the data file.
+        
+        Test Overview:
+        - The user starts backend processes as defined in a configuration file.
+        - For each process, the correct system call should be executed with specified arguments.
+        - The process metadata should be saved to a data file for tracking.
+        """
 
-    @patch('psutil.Process')
-    def test_manager_kills_all_applications(self, mock_psutil_process):
-        file_path = "Temp/my_process_cfg.json"
-        create_config_file(file_path)
-        append_process_data_to_file(dummy_entry1, file_path)
-        append_process_data_to_file(dummy_entry2, file_path)
-        close_applications(file_path)
-        expected_process_calls = [
-            call(int(dummy_entry1["pid"])),
-            call().terminate(),
-            call(int(dummy_entry2["pid"])),
-            call().terminate()
-        ]
-        mock_psutil_process.assert_has_calls(expected_process_calls)
-        os.remove(file_path)
+        del_temp()
+        mock_popen_instance = MagicMock()
+        mock_popen.return_value = mock_popen_instance
+        mock_popen_instance.pid = 1234
+        mock_popen_instance.poll.return_value = None
 
-    # def test_manager_verifies_if_application_closed(self,mock_subprocess_run):
-    #     file_path ="Temp/my_process_cfg.json"
-    #     create_config_file(file_path)
-    #     append_process_data_to_file(dummy_entry1,file_path)
-    #     append_process_data_to_file(dummy_entry2,file_path)
-    #     close_applications(file_path)
-    #     expected_calls = [call.mock_subprocess_run(["kill", dummy_entry1["pid"]]),call.mock_subprocess_run(["kill", dummy_entry2["pid"]])]
-    #     mock_subprocess_run.assert_has_calls(expected_calls)
-    #     os.remove(file_path)
+        process_manager = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_manager.create_backend_processes_data_file(temp_dir_path)
+        process_manager.launch_processes()
+        expected_calls = [
+                    call(['/path/to/MyApplication', '-a', 'arg1', '-b', 'arg2'], stdout=ANY, stderr=ANY),
+                    call(['/path/to/AnotherApp', '-c', 'argXXX', '-d', 'argZZZZ'], stdout=ANY, stderr=ANY)
+                ]
+        mock_popen.assert_has_calls(expected_calls, any_order=True)
+        saved_processes=load_processes_from_data_file(temp_dir_path / "my_backend_processes_status.json")
+        assert len(saved_processes) == 2
+        self.assertEqual(saved_processes[0]["name"], "MyApplication")
+        self.assertEqual(saved_processes[0]["pid"], "1234")
+        self.assertEqual(saved_processes[0]["log_file"], "LOG.txt")
+        self.assertEqual(saved_processes[0]["port"], "7777")
+        self.assertEqual(saved_processes[1]["name"], "AnotherApp")
+        self.assertEqual(saved_processes[1]["pid"], "1234")
+        self.assertEqual(saved_processes[1]["log_file"], "another_app.log")
+        self.assertEqual(saved_processes[1]["port"], "44444")
+        self.assertEqual(saved_processes[1]["status"], "running")
+
+
+    @patch('Omni.process_manager.process_manager.subprocess.Popen')
+    def test_terminate_processes(self, mock_popen):
+        """
+        User requests the processes to terminate. Each of the processes from data file receive a SIGTERM request 
+        and close correctly.
+        """
+        del_temp()
+        mock_popen_instance = MagicMock()
+        mock_popen.return_value = mock_popen_instance
+        mock_popen_instance.pid = 1234
+        mock_popen_instance.poll.return_value = None
+
+        process_starter = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_starter.create_backend_processes_data_file(temp_dir_path)
+        process_starter.launch_processes()
+        del process_starter
+        process_stoper = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_stoper.close_applications()
 
     @classmethod
     def teardown_class(cls):
-        folder_path = "Temp"
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
+        if os.path.exists(temp_dir_path):
+            shutil.rmtree(temp_dir_path)

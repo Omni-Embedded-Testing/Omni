@@ -1,0 +1,22 @@
+[
+    {
+        "name": "MyApplication",
+        "pid": "1234",
+        "log_file": "LOG.txt",
+        "process_call": "/path/to/MyApplication -a arg1 -b arg2",
+        "start_time": "18:30:26",
+        "port": "7777",
+        "search_string": "AnotherApp",
+        "status": "started"
+    },
+    {
+        "name": "AnotherApp",
+        "pid": "1234",
+        "log_file": "another_app.log",
+        "process_call": "/path/to/AnotherApp -c argXXX -d argZZZZ",
+        "start_time": "18:30:26",
+        "port": "1234",
+        "search_string": "AnotherApp",
+        "status": "started"
+    }
+]

@@ -6,7 +6,13 @@ with open('./Omni/requirements.txt') as f:
 setup(
     name='Omni',
     version='0.0.1',
-    packages=find_packages(),
+    packages=find_packages(include=['Omni', 'Omni.*']),
+    entry_points={
+        "console_scripts": [
+            "omni-backend-start=Omni.cli.omni_start:main",
+            "omni-backend-stop=Omni.cli.omni_stop:main",  
+        ],
+    },
     license="",
     install_requires=requirements,
     package_data={'Omni': [

@@ -1,0 +1,34 @@
+{
+    "backend_processes_data_file": "my_existing_file.json",
+    "backend_processes": [
+        {
+            "name": "MyApplication",
+            "port": "7777",
+            "protocol": "tcp",
+            "path": "/path/to/MyApplication",
+            "arguments": [
+                "-a",
+                "arg1",
+                "-b",
+                "arg2"
+            ],
+            "log_file": "LOG.txt"
+        },
+        {
+            "name": "AnotherApp",
+            "pid": 1234,
+            "log_file": "another_app.log",
+            "process_call": "python another_app.py",
+            "pgrep_string": "App",
+            "status": "started"
+        },
+        {
+            "name": "AnotherApp2",
+            "pid": 1233,
+            "log_file": "another_app.log",
+            "process_call": "python another_app.py",
+            "pgrep_string": "App",
+            "status": "started"
+        }
+    ]
+}

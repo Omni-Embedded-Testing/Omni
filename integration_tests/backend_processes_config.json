@@ -8,7 +8,7 @@
             "path": "/home/eks99th/st/stm32cubeide_1.16.1/plugins/com.st.stm32cube.ide.mcu.externaltools.openocd.linux64_2.3.200.202404091248/tools/bin/openocd",
             "arguments": [
                 "-f",
-                "Debug.cfg",
+                "/home/eks99th/Desktop/Omni/integration_tests/Openocd/Debug.cfg",
                 "-s",
                 "/home/eks99th/Desktop/Omni/Omni/tests/integration_tests/Openocd",
                 "-s",
@@ -20,6 +20,7 @@
                 "-c",
                 "gdb_port 3333"
             ],
+            "search_string": "openocd",
             "log_file": "OpenOCD_LOG.txt"
         }
     ]
