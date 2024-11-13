@@ -2,6 +2,17 @@
     "backend_processes_data_file": "backend_processes_data.json",
     "backend_processes": [
         {
+            "name": "Saleae Logic",
+            "port": "10430",
+            "protocol": "tcp",
+            "path": "/home/eks99th/Downloads/Logic-2.4.14-linux-x64.AppImage",
+            "arguments": [
+                "--automation"
+            ],
+            "search_string": "Logic",
+            "log_file": "Saleae.txt"
+        },
+        {
             "name": "STM OpenOCD",
             "port": "3333",
             "protocol": "tcp",

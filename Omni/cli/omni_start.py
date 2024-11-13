@@ -9,13 +9,12 @@ def main():
                         required=True)
     parser.add_argument("-l", "--log-folder", 
                         help="Path to the folder where logs will be saved. If not provided, logs will be saved in the same directory as the configuration file.",
-                        type=str)
-    
+                        type=str, default=None)
+    parser.add_argument("-o", "--overwrite", 
+                        help="Flag to indicate whether to overwrite the existing backend processes data file.",
+                        action="store_true")
     args = parser.parse_args()
 
     process_manager = Omni.process_manager.process_manager.ProcessManager(args.backend)
-    if args.log_folder:
-        process_manager.create_backend_processes_data_file(args.log_folder)
-    else:
-        process_manager.create_backend_processes_data_file()
+    process_manager.create_backend_processes_data_file(args.log_folder, args.overwrite)
     process_manager.launch_processes()

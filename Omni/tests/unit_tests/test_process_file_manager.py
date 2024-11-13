@@ -6,6 +6,7 @@ import pytest
 import json
 import shutil
 import psutil
+from os.path import isfile
 
 from ...process_manager.process_manager import ProcessManager
 
@@ -64,10 +65,23 @@ class TestProcessManager(unittest.TestCase):
         Raises:
         RuntimeError: If the file already exists.
         """
+        existing_file = test_data_dir_path / "my_existing_file.json"
+        assert isfile(existing_file)
         with pytest.raises(RuntimeError,match="File '.*' already exists!"):
             malformed_process_cfg_file = test_data_dir_path / "backend_processes_malformed2.json"
             manager=ProcessManager(malformed_process_cfg_file)
             manager.create_backend_processes_data_file()
+    
+    def test_create_backend_processes_create_data_file_overwrite_active(self):
+        """
+        User tries to create a backend_processes_data_file, the file already 
+        exists and overwrite is active.
+        """
+        malformed_process_cfg_file = test_data_dir_path / "backend_processes_malformed4.json"
+        existing_file = test_data_dir_path / "dummy.json"
+        manager=ProcessManager(malformed_process_cfg_file)
+        assert isfile(existing_file)
+        manager.create_backend_processes_data_file(overwrite_data_file=True)
 
     def test_launch_processes_with_bad_process_config(self):
         """
@@ -100,11 +114,6 @@ class TestProcessManager(unittest.TestCase):
         """
         Verifies that when the user initiates the launch of backend processes, the expected system calls are made 
         to start each process, and the relevant process data is saved accurately to the data file.
-        
-        Test Overview:
-        - The user starts backend processes as defined in a configuration file.
-        - For each process, the correct system call should be executed with specified arguments.
-        - The process metadata should be saved to a data file for tracking.
         """
 
         del_temp()
@@ -176,8 +185,8 @@ class TestProcessManager(unittest.TestCase):
     @patch('Omni.process_manager.process_manager.psutil.Process')
     def test_terminate_processes_not_terminated(self, mock_process_class, mock_popen, mock_sleep):
         """
-        User requests the processes to terminate. Each of the processes from data file receive a SIGTERM request 
-        and the first one does not terminate propperly.
+        User requests the processes to terminate. Each of the processes from the data file receives a SIGTERM request.
+        The first process terminates correctly, but the second process does not terminate properly, so a SIGKILL signal is sent.
         """
         del_temp()
         mock_popen_instance = MagicMock()

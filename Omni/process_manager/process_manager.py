@@ -48,12 +48,16 @@ class ProcessManager:
             raise KeyError(f"The configuration file '{self.backend_config_file_path}' does not contain 'backend_processes_data_file' entry")
         return backend_processes_data_file
 
-    def create_backend_processes_data_file(self, base_path=None):
+    def create_backend_processes_data_file(self, base_path=None, overwrite_data_file=False):
         temp_backend_processes_data_path = self.__get_backend_processes_data_path(base_path)
+        self.backend_processes_data_path=temp_backend_processes_data_path
         if self.check_file_exists(temp_backend_processes_data_path):
-            self._error_msg_file_already_exists(temp_backend_processes_data_path)
+            if overwrite_data_file:
+                print(f"Overwriting backend processes data file: {temp_backend_processes_data_path}")
+                self._create_empty_process_file()
+            else:
+                self._error_msg_file_already_exists(temp_backend_processes_data_path)
         else:
-            self.backend_processes_data_path=temp_backend_processes_data_path
             print(f"Backend processes data file path: {self.backend_processes_data_path}")
             self._create_empty_process_file()
 
@@ -96,6 +100,7 @@ class ProcessManager:
         print(f"Log file path: {log_path}")
         with open(log_path, 'w') as log_fd:
             process_launch = [process_maped["path"]] + process_maped["arguments"]
+            print(f"Launching process: {process_launch}")
             process = subprocess.Popen(process_launch, stdout=log_fd, stderr=log_fd)
             return_code = process.poll()
             self._eval_ret_code(process_maped, return_code)
@@ -125,6 +130,7 @@ class ProcessManager:
 
     def _create_empty_process_file(self):
         Path(self.backend_processes_data_path).parent.mkdir(parents=True, exist_ok=True)
+        print(f"Creating empty backend processes data file: {self.backend_processes_data_path}")
         with open(self.backend_processes_data_path, "w") as json_file:
             json.dump([], json_file)
 
@@ -156,43 +162,65 @@ class ProcessManager:
         for application in self.backend_loaded_processes:
             pid = application["pid"]
             print(f"Closing '{application['name']}'. Sending SIGTERM to pid: {pid}")
-            self.__terminate_process_by_pid(int(pid))
-            application["status"] = "terminate requested"
-            application["SIGTERM_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            print(f"application status: {application['status']}")
+            if(application["status"] == "running"):
+                terminated =self.__terminate_process_by_pid(int(pid))
+                if terminated:
+                    application["status"] = "terminate requested"
+                    application["SIGTERM_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                else:
+                    print(f"Process with pid '{pid}' does not exist or is not running")
+                    print("Only Running processes can be terminated")
+            else:
+                print(f"Process '{application['name']}' with pid '{pid}' is not running")
+                print("Only Running processes can be terminated")
         self.__save_processes_in_data_file(self.backend_loaded_processes)
-            
+
+    def __terminate_process_by_pid(self, pid: int):
+        process= self.__get_process_handle(pid)
+        if process is not None:
+            process.terminate()
+            return True
+        else:
+            print(f"Process with pid '{pid}' does not exist")
+            return False
     
+
+    def __get_process_handle(self, pid: int):
+        try:
+            process = psutil.Process(int(pid))
+            return process
+        except psutil.NoSuchProcess:
+            return None
+
     def verify_application_termination(self,kill_delay=1):
         for application in self.backend_loaded_processes:
             pid = application["pid"]
             print(f"Verifying application '{application['name']}' termination")
-            try:
-                process = psutil.Process(int(pid))
-            except psutil.NoSuchProcess:
-                print(f"Process '{application['name']}' with pid '{pid}' has been terminated successfully")
+            process= self.__get_process_handle(pid)
+            if process is None:
+                print(f"Process '{application['name']}' with pid '{pid}' is not in memory.")
                 application["status"] = "terminated"
-                continue
-            if process.is_running():
-                print(f"Process '{application['name']}' with pid '{pid}' is still running. SIGTERM failed")
-                print(f"Sending SIGKILL to process '{application['name']}' with pid '{pid}'")
-                application["SIGKILL_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
-                application["status"] = "SIGKILL requested"
-                process.kill()
-                sleep(kill_delay)
-                try:
-                    process = psutil.Process(int(pid))
-                except psutil.NoSuchProcess:
-                    print(f"Process '{application['name']}' with pid '{pid}' has been terminated after SIGKILL")
-                    application["status"] = "killed"
-                    continue
-                if process.is_running():
-                    print(f"Process '{application['name']}' with pid '{pid}' is still running. SIGKILL failed")
-                    application["status"] = "SIGKILL failed"
-        self.__save_processes_in_data_file(self.backend_loaded_processes)
+            else:
+                print(f"Process '{application['name']}' with pid '{pid}' is still in memory.")
+                self.__kill_application(application, kill_delay, process)
+            self.__save_processes_in_data_file(self.backend_loaded_processes)
 
-    def __terminate_process_by_pid(self, pid: int):
-        process = psutil.Process(pid)
-        process.terminate()
+    def __kill_application(self, application, kill_delay, process):
+            pid = application["pid"]
+            print(f"Sending SIGKILL to process '{application['name']}' with pid '{pid}'")
+            application["status"] = "SIGKILL requested"
+            application["SIGKILL_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            process.kill()
+            sleep(kill_delay)
+            process_try2= self.__get_process_handle(pid)
+            if process_try2 is None:
+                print(f"Process '{application['name']}' with pid '{pid}' has been terminated after SIGKILL")
+                application["status"] = "killed"
+            else:
+                print(f"Process '{application['name']}' with pid '{pid}' is still in memory. SIGKILL failed")
+                application["status"] = "SIGKILL failed"
+
 
     def verify_file(self):
         self.__verify_file_exists(self.config_file)

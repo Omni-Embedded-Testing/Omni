@@ -12,6 +12,6 @@ echo -e "${BLUE_BOLD}Activating the Python virtual environment...${RESET}"
 source venv/bin/activate
 
 echo -e "${BLUE_BOLD}Stopping host applications...${RESET}"
-omni-backend-stop --b ./integration_tests/backend_processes_config.json -p ./integration_tests/Temp -d 1
+omni-backend-stop --b ./integration_tests/backend_processes_config.json -p ./integration_tests/Temp --delay 5
 
 echo -e "${GREEN_BOLD}Host applications stopped successfully.${RESET}"

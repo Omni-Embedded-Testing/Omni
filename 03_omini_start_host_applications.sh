@@ -12,7 +12,7 @@ echo -e "${BLUE_BOLD}Activating the Python virtual environment...${RESET}"
 source venv/bin/activate
 
 echo -e "${BLUE_BOLD}Starting host applications...${RESET}"
-python3 ./Omni/tests/integration_tests/startup.py
+omni-backend-start --backend ./integration_tests/backend_processes_config.json -l ./integration_tests/Temp/ --overwrite
 
 echo -e "${GREEN_BOLD}Host applications successfully started.${RESET}"
 
