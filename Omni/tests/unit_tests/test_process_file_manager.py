@@ -9,6 +9,7 @@ import psutil
 from os.path import isfile
 
 from ...process_manager.process_manager import ProcessManager
+from ...process_manager.process_manager import PortClosedError
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 test_data_dir_path = Path(current_file_path) / "process_manager_test_data"
@@ -108,23 +109,29 @@ class TestProcessManager(unittest.TestCase):
         with pytest.raises(RuntimeError, match="Process '.*' has stopped with return code .*"):
             process_manager.launch_processes()
 
-
+    @patch('Omni.process_manager.process_manager.psutil.net_connections')
     @patch('Omni.process_manager.process_manager.subprocess.Popen')
-    def test_launch_processes(self, mock_popen):
+    def test_launch_processes(self, mock_popen,mock_net_connections):
         """
         Verifies that when the user initiates the launch of backend processes, the expected system calls are made 
-        to start each process, and the relevant process data is saved accurately to the data file.
+        to start each process, the relevant process data is saved accurately to the data file and the ports are verified 
+        if open.
         """
-
         del_temp()
         mock_popen_instance = MagicMock()
         mock_popen.return_value = mock_popen_instance
         mock_popen_instance.pid = 1234
         mock_popen_instance.poll.return_value = None
+        mock_conn1 = MagicMock()
+        mock_conn1.laddr = MagicMock(port=7777)
+        mock_conn2 = MagicMock()
+        mock_conn2.laddr = MagicMock(port=44444)
+        mock_net_connections.return_value = [mock_conn1, mock_conn2]
 
         process_manager = ProcessManager(test_data_dir_path / "backend_processes_config.json")
         process_manager.create_backend_processes_data_file(temp_dir_path)
         process_manager.launch_processes()
+        process_manager.verify_open_ports()
         expected_calls = [
                     call(['/path/to/MyApplication', '-a', 'arg1', '-b', 'arg2'], stdout=ANY, stderr=ANY),
                     call(['/path/to/AnotherApp', '-c', 'argXXX', '-d', 'argZZZZ'], stdout=ANY, stderr=ANY)
@@ -141,6 +148,30 @@ class TestProcessManager(unittest.TestCase):
         self.assertEqual(saved_processes[1]["log_file"], "another_app.log")
         self.assertEqual(saved_processes[1]["port"], "44444")
         self.assertEqual(saved_processes[1]["status"], "running")
+
+
+    @patch('Omni.process_manager.process_manager.psutil.net_connections')
+    @patch('Omni.process_manager.process_manager.subprocess.Popen')
+    def test_raises_on_closed_port(self, mock_popen, mock_net_connections):
+        """
+        User initiates the launch of backend processes, during the ports 
+        verification one of the ports is closed hence an exception is raised.
+        """
+
+        del_temp()
+        mock_popen_instance = MagicMock()
+        mock_popen.return_value = mock_popen_instance
+        mock_popen_instance.pid = 1234
+        mock_popen_instance.poll.return_value = None
+        mock_conn1 = MagicMock()
+        mock_conn1.laddr = MagicMock(port=7777)
+        mock_net_connections.return_value = [mock_conn1]
+
+        process_manager = ProcessManager(test_data_dir_path / "backend_processes_config.json")
+        process_manager.create_backend_processes_data_file(temp_dir_path)
+        process_manager.launch_processes()
+        with pytest.raises(PortClosedError, match="Port .* is not open."):
+            process_manager.verify_open_ports()
 
     @patch('Omni.process_manager.process_manager.sleep', return_value=None)
     @patch('Omni.process_manager.process_manager.subprocess.Popen')
@@ -180,7 +211,7 @@ class TestProcessManager(unittest.TestCase):
         self.assertEqual(saved_processes[0]["status"], "terminated")
         self.assertEqual(saved_processes[1]["status"], "terminated")
 
-    @patch('Omni.process_manager.process_manager.sleep', return_value=None)
+    @patch('Omni.cli.console_animations.time.sleep', return_value=None)
     @patch('Omni.process_manager.process_manager.subprocess.Popen')
     @patch('Omni.process_manager.process_manager.psutil.Process')
     def test_terminate_processes_not_terminated(self, mock_process_class, mock_popen, mock_sleep):

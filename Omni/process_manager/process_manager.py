@@ -5,7 +5,8 @@ import psutil
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-
+from rich.console import Console
+from Omni.cli.console_animations import sleep_with_progress
 
 
 # Function to extract each element's properties into a map with mandatory field check
@@ -27,6 +28,9 @@ def extract_backend_processes(process)->dict:
 class InvalidProcessEntry(Exception):
     pass
 
+class PortClosedError(Exception):
+        pass
+
 
 class ProcessManager:
     def __init__(self, _process_config_file):
@@ -35,6 +39,7 @@ class ProcessManager:
         self.backend_processes_data_file_name = self.fetch_backend_processes_data_file_name()
         self.backend_processes_data_path = Path(self.backend_config_file_path).parent / self.backend_processes_data_file_name
         self.backend_loaded_processes = None
+        self.console = Console()
         
 
     def load_config_file(self):
@@ -169,11 +174,9 @@ class ProcessManager:
                     application["status"] = "terminate requested"
                     application["SIGTERM_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
                 else:
-                    print(f"Process with pid '{pid}' does not exist or is not running")
-                    print("Only Running processes can be terminated")
+                    self.console.print(f"Process '{application['name']}' with pid '{pid}' is not running or does not exist", style="bold red")
             else:
-                print(f"Process '{application['name']}' with pid '{pid}' is not running")
-                print("Only Running processes can be terminated")
+                self.console.print(f"Process '{application['name']}' with pid '{pid}' is not running", style="bold green")
         self.__save_processes_in_data_file(self.backend_loaded_processes)
 
     def __terminate_process_by_pid(self, pid: int):
@@ -196,30 +199,63 @@ class ProcessManager:
     def verify_application_termination(self,kill_delay=1):
         for application in self.backend_loaded_processes:
             pid = application["pid"]
-            print(f"Verifying application '{application['name']}' termination")
+            self.console.print(f"Verifying application '[bold cyan]{application['name']}[/bold cyan]' termination")
             process= self.__get_process_handle(pid)
             if process is None:
-                print(f"Process '{application['name']}' with pid '{pid}' is not in memory.")
+                self.console.print(f"[bold green]Process '{application['name']}' with pid '{pid}' is not in memory.[/bold green]")
                 application["status"] = "terminated"
             else:
-                print(f"Process '{application['name']}' with pid '{pid}' is still in memory.")
-                self.__kill_application(application, kill_delay, process)
+                status = process.status()
+                if status == psutil.STATUS_ZOMBIE:
+                    self.console.print(f"Process with PID {pid} is currently a zombie process.")
+                    self.console.print(f"[bold green]Process '{application['name']}' with pid '{pid}' will be removed when Omni finishes execution.[/bold green]")
+                else:
+                    self.console.print(f"Process with PID {pid} has status {status}.")
+                    self.console.print(f"[bold cyan]Requesting SIGKILL to process '{application['name']}' with pid '{pid}'[/bold cyan]")
+                    self.__kill_application(application, kill_delay, process)                
             self.__save_processes_in_data_file(self.backend_loaded_processes)
 
     def __kill_application(self, application, kill_delay, process):
             pid = application["pid"]
-            print(f"Sending SIGKILL to process '{application['name']}' with pid '{pid}'")
+            app_name = application["name"]
+            # Log SIGKILL initiation
+            self.console.print(f"[bold red]Sending SIGKILL to process '{app_name}' with pid '{pid}'[/bold red]")
             application["status"] = "SIGKILL requested"
-            application["SIGKILL_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3],
+            application["SIGKILL_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3]
             process.kill()
-            sleep(kill_delay)
-            process_try2= self.__get_process_handle(pid)
-            if process_try2 is None:
-                print(f"Process '{application['name']}' with pid '{pid}' has been terminated after SIGKILL")
+            sleep_with_progress(kill_delay, "SIGKILL delay")
+            process_after_kill= self.__get_process_handle(pid)
+            if process_after_kill is None:
+                self.console.print(f"[bold green]Process '{app_name}' with pid '{pid}' has been terminated after SIGKILL.[/bold green]")
                 application["status"] = "killed"
             else:
-                print(f"Process '{application['name']}' with pid '{pid}' is still in memory. SIGKILL failed")
-                application["status"] = "SIGKILL failed"
+                status = process.status()
+                if status == psutil.STATUS_ZOMBIE:
+                    self.console.print(f"Process with PID {pid} is currently a zombie process.")
+                    self.console.print(f"[bold green]Process '{application['name']}' with pid '{pid}' will be removed when Omni finishes execution.[/bold green]")
+                    application["status"] = "killed"
+                else:
+                    self.console.print(f"[bold red]Process '{app_name}' with pid '{pid}' has not been terminated after SIGKILL.[/bold red]")
+                    application["status"] = "SIGKILL FAILED"
+
+
+    def verify_open_ports(self):
+        backend_processes_array = self.backend_config_file_stream.get('backend_processes', [])
+        for process in backend_processes_array:
+            process_maped = extract_backend_processes(process)
+            port = process_maped["port"]
+            print(f"Verifying port '{port}' from application '{process_maped['name']}'")
+            if self.__check_port_open(port) is False:
+                raise PortClosedError(f"Port '{port}' from application '{process_maped['name']} is not open. Verify if the application is running")
+            else:
+                print(f"Port '{port}' from application is open")
+        self.console.print("[green]All ports are open[/green]", style="bold green")
+    
+    def __check_port_open(self,port):
+            for conn in psutil.net_connections(kind="inet"):
+                if str(conn.laddr.port) == str(port):
+                    return True
+            return False
 
 
     def verify_file(self):
