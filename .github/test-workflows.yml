@@ -1,0 +1,64 @@
+name: Execute Script on Self-Hosted Runner
+
+on: [push]
+
+jobs:
+  run-script:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Prepare Test Environment
+      run: |
+        chmod +x ./01_prepare_test_environment.sh
+        ./01_prepare_test_environment.sh
+
+    - name: Execute Unit Tests
+      run: |
+        chmod +x ./02_omini_unittests.sh
+        ./02_omini_unittests.sh
+
+    - name: Adjust Coverage Report Paths for SonarQube
+      run: |
+          chmod +x ./0x_Ajust_Paths_for_Sonarqube.sh
+          ./0x_Ajust_Paths_for_Sonarqube.sh
+
+    - name: SonarCloud scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+    - name: Start Host Applications
+      run: |
+        chmod +x ./03_omini_start_host_applications.sh
+        ./03_omini_start_host_applications.sh
+
+    - name: Execute Integration Tests
+      run: |
+        chmod +x ./04_omini_integrationtests.sh
+        ./04_omini_integrationtests.sh
+
+    - name: Stop Host Applications
+      if: always()
+      run: |
+          chmod +x ./98_omini_stop_host_applications.sh
+          ./98_omini_stop_host_applications.sh
+
+    - name: Tear down tests environment
+      run: |
+        chmod +x ./99_tear_down_test_environment.sh
+        ./99_tear_down_test_environment.sh
+
+    - name: Archive Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-artifacts
+        path: ./Omni/tests/integration_tests/Temp
+

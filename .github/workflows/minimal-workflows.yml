@@ -1,0 +1,22 @@
+name: onCommit Pipeline
+
+on: [push]
+
+jobs:
+  minimal-verifications:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Prepare Test Environment
+      run: |
+        chmod +x ./01_prepare_test_environment.sh
+        ./01_prepare_test_environment.sh
+
+    - name: Execute Unit Tests
+      run: |
+        chmod +x ./02_omini_unittests.sh
+        ./02_omini_unittests.sh
+
