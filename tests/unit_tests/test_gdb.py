@@ -149,7 +149,6 @@ def test_gdb_sets_log_file_path(mock_gdb_controller, gdb_installed_mock):
         "-gdb-set logging file "+path)
     assert my_instance.logfile_path == path
     assert my_instance.logfile_dir == os.path.dirname(path)
-    assert 1 == 2
 
 
 def test_gdb_sets_log_file_raise_exception_if_error_msg_received(mock_gdb_controller, gdb_installed_mock, reset_response_mapping):
