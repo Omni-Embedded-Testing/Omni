@@ -20,3 +20,17 @@ jobs:
         chmod +x ./02_omini_unittests.sh
         ./02_omini_unittests.sh
 
+    - name: Adjust Coverage Report Paths for SonarQube
+      run: |
+          chmod +x ./0x_Ajust_Paths_for_Sonarqube.sh
+          ./0x_Ajust_Paths_for_Sonarqube.sh
+
+    - name: SonarCloud scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+

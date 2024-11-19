@@ -8,10 +8,8 @@ import shutil
 import psutil
 from os.path import isfile
 
-# from process_manager.process_manager import ProcessManager
-# from process_manager.process_manager import PortClosedError
-#from ...process_manager.process_manager import PortClosedError
 from Omni.process_manager.process_manager import ProcessManager, PortClosedError
+
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 test_data_dir_path = Path(current_file_path) / "process_manager_test_data"
 temp_dir_path = test_data_dir_path / "Temp"
