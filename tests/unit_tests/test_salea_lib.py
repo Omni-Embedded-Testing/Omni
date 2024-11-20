@@ -11,6 +11,7 @@ from Omni.robotlibraries.SaleaLogicAnalyzer import (LogicAnalyzer,
 
 from unittest.mock import patch, Mock, MagicMock, ANY
 from saleae.automation import *
+import platform
 
 
 class TestSalea(unittest.TestCase):
@@ -318,8 +319,18 @@ class TestSalea(unittest.TestCase):
                                "capture_name.txt", "TEST_SPI", radix="HEXADECIMAL")
         mock_export_cfg.assert_called_with(
             ANY, saleae.automation.capture.RadixType.HEXADECIMAL)
-        mock_spi_analyzer.export_data_table.assert_called_with(
-            filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+        if platform.system() == "Windows":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture\\capture_name.txt', analyzers=ANY)
+            pass
+        elif platform.system() == "Linux":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+            pass
+        else:
+            # Code for other operating systems
+            pass
+
+
+        
 
     @patch("Omni.robotlibraries.SaleaLogicAnalyzer.SaleaLogicAnalyzer.automation.capture.DataTableExportConfiguration",
            return_value="mocked_ExportConfiguration")
@@ -337,8 +348,16 @@ class TestSalea(unittest.TestCase):
                                "capture_name.txt", "TEST_SPI", radix="BINARY")
         mock_export_cfg.assert_called_with(
             ANY, saleae.automation.capture.RadixType.BINARY)
-        mock_spi_analyzer.export_data_table.assert_called_with(
-            filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+        if platform.system() == "Windows":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture\\capture_name.txt', analyzers=ANY)
+            pass
+        elif platform.system() == "Linux":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+            pass
+        else:
+            # Code for other operating systems
+            pass
+        
 
     @patch("Omni.robotlibraries.SaleaLogicAnalyzer.SaleaLogicAnalyzer.automation.capture.DataTableExportConfiguration",
            return_value="mocked_ExportConfiguration")
@@ -354,10 +373,16 @@ class TestSalea(unittest.TestCase):
             spi_channels_cfg, spi_protocol_cfg, "TEST_SPI")
         my_logic.export_to_csv("/folder/to/csv/capture",
                                "capture_name.txt", "TEST_SPI", radix="DECIMAL")
-        mock_export_cfg.assert_called_with(
-            ANY, saleae.automation.capture.RadixType.DECIMAL)
-        mock_spi_analyzer.export_data_table.assert_called_with(
-            filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+        mock_export_cfg.assert_called_with(ANY, saleae.automation.capture.RadixType.DECIMAL)
+        if platform.system() == "Windows":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture\\capture_name.txt', analyzers=ANY)
+            pass
+        elif platform.system() == "Linux":
+            mock_spi_analyzer.export_data_table.assert_called_with(filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+            pass
+        else:
+            # Code for other operating systems
+            pass
 
     base_uart_dict = {"Input Channel": 2,
                       "Bit Rate (Bits/s)": 115200,
@@ -502,8 +527,18 @@ class TestSalea(unittest.TestCase):
                                "capture_name.txt", "TEST_SPI", radix="ASCII")
         mock_export_cfg.assert_called_with(
             ANY, saleae.automation.capture.RadixType.ASCII)
-        mock_spi_analyzer.export_data_table.assert_called_with(
+        if platform.system() == "Windows":
+            mock_spi_analyzer.export_data_table.assert_called_with(
+            filepath='/folder/to/csv/capture\\capture_name.txt', analyzers=ANY)
+            pass
+        elif platform.system() == "Linux":
+            mock_spi_analyzer.export_data_table.assert_called_with(
             filepath='/folder/to/csv/capture/capture_name.txt', analyzers=ANY)
+            pass
+        else:
+            # Code for other operating systems
+            pass
+
 
     @patch("Omni.robotlibraries.SaleaLogicAnalyzer.SaleaLogicAnalyzer.automation.capture.DataTableExportConfiguration",
            return_value="mocked_ExportConfiguration")
@@ -526,8 +561,19 @@ class TestSalea(unittest.TestCase):
         mock_capture = Mock()
         my_logic.capture = mock_capture
         my_logic.save_raw("/path/to/folder", "filename")
-        mock_capture.save_capture.assert_called_once_with(
+        if platform.system() == "Windows":
+            mock_capture.save_capture.assert_called_once_with(
+            filepath='/path/to/folder\\filename')
+            pass
+        elif platform.system() == "Linux":
+            mock_capture.save_capture.assert_called_once_with(
             filepath='/path/to/folder/filename')
+            pass
+        else:
+            # Code for other operating systems
+            pass
+
+        
 
     @patch('saleae.automation.LogicDeviceConfiguration')
     def test_set_device_configuration_configures_glitch_filters(self, mock_device_cfg):
